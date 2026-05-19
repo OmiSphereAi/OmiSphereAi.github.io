@@ -1,0 +1,55 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #060610;
+  --surface: #0c0c1e;
+  --surface2: #11112a;
+  --border: rgba(99, 102, 241, 0.15);
+  --accent: #6366f1;
+  --accent-glow: rgba(99, 102, 241, 0.25);
+  --bot: #ef4444;
+  --suspicious: #f59e0b;
+  --human: #22c55e;
+  --text: #e2e8f0;
+  --muted: #64748b;
+}
+
+body {
+  background-color: var(--bg);
+  color: var(--text);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+/* Subtle animated background grid */
+.bg-grid {
+  background-image:
+    linear-gradient(rgba(99, 102, 241, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(99, 102, 241, 0.03) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+.glow-indigo {
+  box-shadow: 0 0 20px rgba(99, 102, 241, 0.15);
+}
+
+.score-bot { color: #ef4444; }
+.score-suspicious { color: #f59e0b; }
+.score-human { color: #22c55e; }
+
+.badge-bot {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+.badge-suspicious {
+  background: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+.badge-human {
+  background: rgba(34, 197, 94, 0.15);
+  color: #22c55e;
+  border: 1px solid rgba(34, 197, 94, 0.3);
+}
