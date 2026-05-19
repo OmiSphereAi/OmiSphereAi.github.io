@@ -38,3 +38,4 @@ next-env.d.ts
 omnisphere.db
 omnisphere.db-shm
 omnisphere.db-wal
+omnisphere-data.json
