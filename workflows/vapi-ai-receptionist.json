@@ -1,0 +1,711 @@
+{
+  "name": "Vapi AI Receptionist - OmiSphere",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "vapi-receptionist",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "11111111-0001-0001-0001-000000000001",
+      "name": "Vapi Webhook Receiver",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "11111111-0001-0001-0001-000000000099"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json;\nconst toolCallList = body?.message?.toolCallList ?? [];\nconst call = body?.message?.call ?? {};\n\nif (toolCallList.length === 0) {\n  return [{\n    json: {\n      toolCallId: 'unknown',\n      functionName: '__noop__',\n      args: {},\n      callerPhone: call?.customer?.number ?? '',\n      callId: call?.id ?? ''\n    }\n  }];\n}\n\nconst tc = toolCallList[0];\nconst args = typeof tc.function.arguments === 'string'\n  ? JSON.parse(tc.function.arguments)\n  : tc.function.arguments;\n\nreturn [{\n  json: {\n    toolCallId: tc.id,\n    functionName: tc.function.name,\n    args: args,\n    callerPhone: call?.customer?.number ?? args?.client_phone ?? '',\n    callId: call?.id ?? ''\n  }\n}];"
+      },
+      "id": "11111111-0002-0002-0002-000000000002",
+      "name": "Parse Vapi Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [480, 300]
+    },
+    {
+      "parameters": {
+        "mode": "rules",
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": { "caseSensitive": true, "typeValidation": "loose" },
+                "conditions": [
+                  {
+                    "id": "rule-0",
+                    "leftValue": "={{ $json.functionName }}",
+                    "rightValue": "check_availability",
+                    "operator": { "type": "string", "operation": "equals" }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": false
+            },
+            {
+              "conditions": {
+                "options": { "caseSensitive": true, "typeValidation": "loose" },
+                "conditions": [
+                  {
+                    "id": "rule-1",
+                    "leftValue": "={{ $json.functionName }}",
+                    "rightValue": "book_appointment",
+                    "operator": { "type": "string", "operation": "equals" }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": false
+            },
+            {
+              "conditions": {
+                "options": { "caseSensitive": true, "typeValidation": "loose" },
+                "conditions": [
+                  {
+                    "id": "rule-2",
+                    "leftValue": "={{ $json.functionName }}",
+                    "rightValue": "reschedule_appointment",
+                    "operator": { "type": "string", "operation": "equals" }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": false
+            },
+            {
+              "conditions": {
+                "options": { "caseSensitive": true, "typeValidation": "loose" },
+                "conditions": [
+                  {
+                    "id": "rule-3",
+                    "leftValue": "={{ $json.functionName }}",
+                    "rightValue": "cancel_appointment",
+                    "operator": { "type": "string", "operation": "equals" }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": false
+            }
+          ]
+        },
+        "options": { "fallbackOutput": "extra" }
+      },
+      "id": "11111111-0003-0003-0003-000000000003",
+      "name": "Route by Function Name",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [720, 300]
+    },
+
+    {
+      "parameters": {
+        "jsCode": "const parsedData = $('Parse Vapi Payload').first().json;\nconst args = parsedData.args || {};\nconst tz = $env.BUSINESS_TIMEZONE || 'America/New_York';\nconst startHour = parseInt($env.BUSINESS_START_HOUR || '9');\nconst endHour = parseInt($env.BUSINESS_END_HOUR || '17');\nconst durationMins = parseInt($env.SLOT_DURATION_MINUTES || '30');\nconst lookaheadDays = 7;\n\nconst baseDate = args.preferred_date ? new Date(args.preferred_date) : new Date();\nbaseDate.setHours(0, 0, 0, 0);\n\nconst windowEnd = new Date(baseDate.getTime() + lookaheadDays * 24 * 60 * 60 * 1000);\n\nreturn [{\n  json: {\n    toolCallId: parsedData.toolCallId,\n    callerPhone: parsedData.callerPhone,\n    args: args,\n    windowStart: baseDate.toISOString(),\n    windowEnd: windowEnd.toISOString(),\n    durationMins: durationMins,\n    startHour: startHour,\n    endHour: endHour,\n    timezone: tz\n  }\n}];"
+      },
+      "id": "11111111-0004-0004-0004-000000000004",
+      "name": "Calc Availability Window",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [960, 60]
+    },
+    {
+      "parameters": {
+        "resource": "event",
+        "operation": "getAll",
+        "calendarId": "={{ $env.GOOGLE_CALENDAR_ID || 'primary' }}",
+        "returnAll": true,
+        "options": {
+          "timeMin": "={{ $json.windowStart }}",
+          "timeMax": "={{ $json.windowEnd }}",
+          "singleEvents": true,
+          "orderBy": "startTime"
+        }
+      },
+      "id": "11111111-0005-0005-0005-000000000005",
+      "name": "Get Calendar Events",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1,
+      "position": [1200, 60],
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "REPLACE_WITH_CREDENTIAL_ID",
+          "name": "Google Calendar OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const windowData = $('Calc Availability Window').first().json;\nconst events = $input.all().map(i => i.json);\n\nconst tz = windowData.timezone || 'America/New_York';\nconst startHour = windowData.startHour || 9;\nconst endHour = windowData.endHour || 17;\nconst durationMins = windowData.durationMins || 30;\nconst businessDays = ($env.BUSINESS_DAYS || '1,2,3,4,5').split(',').map(Number);\nconst slotMs = durationMins * 60 * 1000;\n\nconst busyPeriods = events\n  .filter(e => e.start && (e.start.dateTime || e.start.date))\n  .map(e => ({\n    start: new Date(e.start.dateTime || e.start.date + 'T00:00:00').getTime(),\n    end: new Date(e.end.dateTime || e.end.date + 'T23:59:59').getTime()\n  }));\n\nfunction getWeekdayISO(ts) {\n  const day = new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'short' }).format(new Date(ts));\n  return { Mon:1, Tue:2, Wed:3, Thu:4, Fri:5, Sat:6, Sun:7 }[day] || 7;\n}\n\nfunction getLocalHour(ts) {\n  const parts = new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', hour12: false }).formatToParts(new Date(ts));\n  return parseInt(parts.find(p => p.type === 'hour').value);\n}\n\nfunction isBusinessTime(ts) {\n  const dow = getWeekdayISO(ts);\n  const hr = getLocalHour(ts);\n  return businessDays.includes(dow) && hr >= startHour && hr < endHour;\n}\n\nfunction isBusy(s, e) {\n  return busyPeriods.some(b => s < b.end && e > b.start);\n}\n\nfunction fmtSlot(ts) {\n  return new Intl.DateTimeFormat('en-US', {\n    timeZone: tz, weekday: 'long', month: 'long', day: 'numeric',\n    hour: 'numeric', minute: '2-digit', hour12: true\n  }).format(new Date(ts));\n}\n\nconst windowStart = new Date(windowData.windowStart).getTime();\nconst windowEnd = new Date(windowData.windowEnd).getTime();\nconst slots = [];\nlet cursor = windowStart;\n\nwhile (cursor < windowEnd && slots.length < 8) {\n  const slotEnd = cursor + slotMs;\n  if (isBusinessTime(cursor) && isBusinessTime(slotEnd - 60000) && !isBusy(cursor, slotEnd)) {\n    slots.push(fmtSlot(cursor));\n    cursor += slotMs;\n  } else {\n    cursor += 30 * 60 * 1000;\n  }\n}\n\nreturn [{\n  json: {\n    toolCallId: windowData.toolCallId,\n    availableSlots: slots,\n    timezone: tz\n  }\n}];"
+      },
+      "id": "11111111-0006-0006-0006-000000000006",
+      "name": "Find Open Slots",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1440, 60]
+    },
+    {
+      "parameters": {
+        "jsCode": "const { toolCallId, availableSlots } = $json;\nlet result;\nif (!availableSlots || availableSlots.length === 0) {\n  result = \"I'm sorry, there are no available slots in the next 7 days. Would you like me to check a different time range, or can I take a message for the team?\";\n} else {\n  const listed = availableSlots.slice(0, 5).join(', ');\n  result = 'I have the following times available: ' + listed + '. Which one works best for you?';\n}\nreturn [{ json: { toolCallId, result } }];"
+      },
+      "id": "11111111-0007-0007-0007-000000000007",
+      "name": "Format Availability Reply",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1680, 60]
+    },
+
+    {
+      "parameters": {
+        "jsCode": "const parsedData = $('Parse Vapi Payload').first().json;\nconst args = parsedData.args || {};\nconst tz = $env.BUSINESS_TIMEZONE || 'America/New_York';\n\nconst start = new Date(args.datetime);\nconst durationMins = args.duration_minutes || parseInt($env.SLOT_DURATION_MINUTES || '30');\nconst end = new Date(start.getTime() + durationMins * 60000);\n\nconst humanStart = new Intl.DateTimeFormat('en-US', {\n  timeZone: tz, weekday: 'long', month: 'long', day: 'numeric',\n  hour: 'numeric', minute: '2-digit', hour12: true\n}).format(start);\n\nconst tzAbbr = new Intl.DateTimeFormat('en-US', { timeZone: tz, timeZoneName: 'short' })\n  .formatToParts(start).find(p => p.type === 'timeZoneName')?.value || 'ET';\n\nreturn [{\n  json: {\n    toolCallId: parsedData.toolCallId,\n    callerPhone: parsedData.callerPhone,\n    clientName: args.client_name || 'Client',\n    clientPhone: args.client_phone || parsedData.callerPhone,\n    service: args.service || 'Appointment',\n    notes: args.notes || '',\n    eventSummary: (args.service || 'Appointment') + ' - ' + (args.client_name || 'Client'),\n    eventStart: start.toISOString(),\n    eventEnd: end.toISOString(),\n    humanStart: humanStart,\n    tzAbbr: tzAbbr\n  }\n}];"
+      },
+      "id": "11111111-0008-0008-0008-000000000008",
+      "name": "Prepare Booking Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [960, 260]
+    },
+    {
+      "parameters": {
+        "resource": "event",
+        "operation": "create",
+        "calendarId": "={{ $env.GOOGLE_CALENDAR_ID || 'primary' }}",
+        "start": "={{ $json.eventStart }}",
+        "end": "={{ $json.eventEnd }}",
+        "additionalFields": {
+          "summary": "={{ $json.eventSummary }}",
+          "description": "={{ 'Client: ' + $json.clientName + '\\nPhone: ' + $json.clientPhone + '\\nService: ' + $json.service + '\\nNotes: ' + ($json.notes || 'N/A') }}"
+        }
+      },
+      "id": "11111111-0009-0009-0009-000000000009",
+      "name": "Create Calendar Event",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1,
+      "position": [1200, 260],
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "REPLACE_WITH_CREDENTIAL_ID",
+          "name": "Google Calendar OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "from": "={{ $env.TWILIO_FROM_NUMBER }}",
+        "to": "={{ $('Prepare Booking Data').first().json.clientPhone }}",
+        "message": "={{ 'Hi ' + $('Prepare Booking Data').first().json.clientName + '! Your ' + $('Prepare Booking Data').first().json.service + ' is confirmed for ' + $('Prepare Booking Data').first().json.humanStart + ' ' + $('Prepare Booking Data').first().json.tzAbbr + '. Reply CANCEL to cancel. See you soon!' }}"
+      },
+      "id": "11111111-0010-0010-0010-000000000010",
+      "name": "Send Booking Confirmation SMS",
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [1440, 260],
+      "credentials": {
+        "twilioApi": {
+          "id": "REPLACE_WITH_TWILIO_CREDENTIAL_ID",
+          "name": "Twilio API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const d = $('Prepare Booking Data').first().json;\nreturn [{\n  json: {\n    toolCallId: d.toolCallId,\n    result: 'Your ' + d.service + ' appointment has been booked for ' + d.humanStart + ' ' + d.tzAbbr + '. A confirmation text has been sent to ' + d.clientPhone + '. Is there anything else I can help you with?'\n  }\n}];"
+      },
+      "id": "11111111-0011-0011-0011-000000000011",
+      "name": "Format Booking Reply",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1680, 260]
+    },
+
+    {
+      "parameters": {
+        "jsCode": "const parsedData = $('Parse Vapi Payload').first().json;\nconst args = parsedData.args || {};\nconst now = new Date();\nconst pastWindow = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000);\nconst futureWindow = new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000);\n\nreturn [{\n  json: {\n    toolCallId: parsedData.toolCallId,\n    callerPhone: parsedData.callerPhone,\n    searchQuery: args.client_name || '',\n    newDatetime: args.new_datetime,\n    durationMins: args.duration_minutes || parseInt($env.SLOT_DURATION_MINUTES || '30'),\n    clientName: args.client_name || 'Client',\n    clientPhone: args.client_phone || parsedData.callerPhone,\n    service: args.service || '',\n    searchStart: pastWindow.toISOString(),\n    searchEnd: futureWindow.toISOString()\n  }\n}];"
+      },
+      "id": "11111111-0012-0012-0012-000000000012",
+      "name": "Prepare Reschedule Search",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [960, 460]
+    },
+    {
+      "parameters": {
+        "resource": "event",
+        "operation": "getAll",
+        "calendarId": "={{ $env.GOOGLE_CALENDAR_ID || 'primary' }}",
+        "returnAll": true,
+        "options": {
+          "timeMin": "={{ $json.searchStart }}",
+          "timeMax": "={{ $json.searchEnd }}",
+          "query": "={{ $json.searchQuery }}",
+          "singleEvents": true,
+          "orderBy": "startTime"
+        }
+      },
+      "id": "11111111-0013-0013-0013-000000000013",
+      "name": "Search Events for Reschedule",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1,
+      "position": [1200, 460],
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "REPLACE_WITH_CREDENTIAL_ID",
+          "name": "Google Calendar OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const searchData = $('Prepare Reschedule Search').first().json;\nconst events = $input.all().map(i => i.json);\nconst tz = $env.BUSINESS_TIMEZONE || 'America/New_York';\n\nconst futureEvents = events.filter(e => {\n  const eventStart = new Date(e.start?.dateTime || e.start?.date + 'T00:00:00');\n  return eventStart >= new Date();\n});\n\nif (futureEvents.length === 0) {\n  return [{\n    json: {\n      toolCallId: searchData.toolCallId,\n      error: true,\n      result: \"I couldn't find an upcoming appointment for \" + searchData.clientName + \". Could you confirm the name or give me more details about the appointment?\"\n    }\n  }];\n}\n\nconst target = futureEvents[0];\nconst newStart = new Date(searchData.newDatetime);\nconst newEnd = new Date(newStart.getTime() + searchData.durationMins * 60000);\n\nconst humanStart = new Intl.DateTimeFormat('en-US', {\n  timeZone: tz, weekday: 'long', month: 'long', day: 'numeric',\n  hour: 'numeric', minute: '2-digit', hour12: true\n}).format(newStart);\n\nconst tzAbbr = new Intl.DateTimeFormat('en-US', { timeZone: tz, timeZoneName: 'short' })\n  .formatToParts(newStart).find(p => p.type === 'timeZoneName')?.value || 'ET';\n\nreturn [{\n  json: {\n    toolCallId: searchData.toolCallId,\n    eventId: target.id,\n    clientName: searchData.clientName,\n    clientPhone: searchData.clientPhone,\n    service: searchData.service || (target.summary || '').split(' - ')[0] || 'Appointment',\n    newStart: newStart.toISOString(),\n    newEnd: newEnd.toISOString(),\n    humanStart: humanStart,\n    tzAbbr: tzAbbr,\n    error: false\n  }\n}];"
+      },
+      "id": "11111111-0014-0014-0014-000000000014",
+      "name": "Pick Event to Reschedule",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1440, 460]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "typeValidation": "loose" },
+          "conditions": [
+            {
+              "id": "reschedulecond",
+              "leftValue": "={{ $json.error }}",
+              "rightValue": false,
+              "operator": { "type": "boolean", "operation": "equals" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "11111111-0015-0015-0015-000000000015",
+      "name": "Reschedule Error Check",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1680, 460]
+    },
+    {
+      "parameters": {
+        "resource": "event",
+        "operation": "update",
+        "calendarId": "={{ $env.GOOGLE_CALENDAR_ID || 'primary' }}",
+        "eventId": "={{ $json.eventId }}",
+        "updateFields": {
+          "start": "={{ $json.newStart }}",
+          "end": "={{ $json.newEnd }}"
+        }
+      },
+      "id": "11111111-0016-0016-0016-000000000016",
+      "name": "Update Calendar Event",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1,
+      "position": [1920, 360],
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "REPLACE_WITH_CREDENTIAL_ID",
+          "name": "Google Calendar OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "from": "={{ $env.TWILIO_FROM_NUMBER }}",
+        "to": "={{ $('Pick Event to Reschedule').first().json.clientPhone }}",
+        "message": "={{ 'Hi ' + $('Pick Event to Reschedule').first().json.clientName + '! Your appointment has been rescheduled to ' + $('Pick Event to Reschedule').first().json.humanStart + ' ' + $('Pick Event to Reschedule').first().json.tzAbbr + '. Call us if you need further changes.' }}"
+      },
+      "id": "11111111-0017-0017-0017-000000000017",
+      "name": "Send Reschedule SMS",
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [2160, 360],
+      "credentials": {
+        "twilioApi": {
+          "id": "REPLACE_WITH_TWILIO_CREDENTIAL_ID",
+          "name": "Twilio API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const d = $('Pick Event to Reschedule').first().json;\nreturn [{\n  json: {\n    toolCallId: d.toolCallId,\n    result: d.error\n      ? d.result\n      : 'Your appointment has been successfully rescheduled to ' + d.humanStart + ' ' + d.tzAbbr + '. A text update has been sent to ' + d.clientPhone + '. Is there anything else I can help you with?'\n  }\n}];"
+      },
+      "id": "11111111-0018-0018-0018-000000000018",
+      "name": "Format Reschedule Reply",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2400, 460]
+    },
+
+    {
+      "parameters": {
+        "jsCode": "const parsedData = $('Parse Vapi Payload').first().json;\nconst args = parsedData.args || {};\nconst now = new Date();\nconst pastWindow = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);\nconst futureWindow = new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000);\n\nreturn [{\n  json: {\n    toolCallId: parsedData.toolCallId,\n    callerPhone: parsedData.callerPhone,\n    searchQuery: args.client_name || '',\n    clientName: args.client_name || 'Client',\n    clientPhone: args.client_phone || parsedData.callerPhone,\n    searchStart: pastWindow.toISOString(),\n    searchEnd: futureWindow.toISOString()\n  }\n}];"
+      },
+      "id": "11111111-0019-0019-0019-000000000019",
+      "name": "Prepare Cancel Search",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [960, 660]
+    },
+    {
+      "parameters": {
+        "resource": "event",
+        "operation": "getAll",
+        "calendarId": "={{ $env.GOOGLE_CALENDAR_ID || 'primary' }}",
+        "returnAll": true,
+        "options": {
+          "timeMin": "={{ $json.searchStart }}",
+          "timeMax": "={{ $json.searchEnd }}",
+          "query": "={{ $json.searchQuery }}",
+          "singleEvents": true,
+          "orderBy": "startTime"
+        }
+      },
+      "id": "11111111-0020-0020-0020-000000000020",
+      "name": "Search Events for Cancel",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1,
+      "position": [1200, 660],
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "REPLACE_WITH_CREDENTIAL_ID",
+          "name": "Google Calendar OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const searchData = $('Prepare Cancel Search').first().json;\nconst events = $input.all().map(i => i.json);\nconst tz = $env.BUSINESS_TIMEZONE || 'America/New_York';\n\nconst futureEvents = events.filter(e => {\n  const t = new Date(e.start?.dateTime || e.start?.date + 'T00:00:00');\n  return t >= new Date();\n});\n\nif (futureEvents.length === 0) {\n  return [{\n    json: {\n      toolCallId: searchData.toolCallId,\n      error: true,\n      result: \"I couldn't find an upcoming appointment for \" + searchData.clientName + \". Could you double-check the name or the date of the appointment?\"\n    }\n  }];\n}\n\nconst target = futureEvents[0];\nconst eventStart = new Date(target.start?.dateTime || target.start?.date + 'T00:00:00');\n\nconst humanStart = new Intl.DateTimeFormat('en-US', {\n  timeZone: tz, weekday: 'long', month: 'long', day: 'numeric',\n  hour: 'numeric', minute: '2-digit', hour12: true\n}).format(eventStart);\n\nconst tzAbbr = new Intl.DateTimeFormat('en-US', { timeZone: tz, timeZoneName: 'short' })\n  .formatToParts(eventStart).find(p => p.type === 'timeZoneName')?.value || 'ET';\n\nreturn [{\n  json: {\n    toolCallId: searchData.toolCallId,\n    eventId: target.id,\n    clientName: searchData.clientName,\n    clientPhone: searchData.clientPhone,\n    humanStart: humanStart,\n    tzAbbr: tzAbbr,\n    error: false\n  }\n}];"
+      },
+      "id": "11111111-0021-0021-0021-000000000021",
+      "name": "Validate Cancel Event",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1440, 660]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "typeValidation": "loose" },
+          "conditions": [
+            {
+              "id": "cancelcond",
+              "leftValue": "={{ $json.error }}",
+              "rightValue": false,
+              "operator": { "type": "boolean", "operation": "equals" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "11111111-0022-0022-0022-000000000022",
+      "name": "Cancel Error Check",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1680, 660]
+    },
+    {
+      "parameters": {
+        "resource": "event",
+        "operation": "delete",
+        "calendarId": "={{ $env.GOOGLE_CALENDAR_ID || 'primary' }}",
+        "eventId": "={{ $json.eventId }}"
+      },
+      "id": "11111111-0023-0023-0023-000000000023",
+      "name": "Delete Calendar Event",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1,
+      "position": [1920, 560],
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "REPLACE_WITH_CREDENTIAL_ID",
+          "name": "Google Calendar OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "from": "={{ $env.TWILIO_FROM_NUMBER }}",
+        "to": "={{ $('Validate Cancel Event').first().json.clientPhone }}",
+        "message": "={{ 'Hi ' + $('Validate Cancel Event').first().json.clientName + '! Your appointment on ' + $('Validate Cancel Event').first().json.humanStart + ' has been cancelled. We hope to see you again soon — call us anytime to rebook!' }}"
+      },
+      "id": "11111111-0024-0024-0024-000000000024",
+      "name": "Send Cancellation SMS",
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [2160, 560],
+      "credentials": {
+        "twilioApi": {
+          "id": "REPLACE_WITH_TWILIO_CREDENTIAL_ID",
+          "name": "Twilio API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const d = $('Validate Cancel Event').first().json;\nreturn [{\n  json: {\n    toolCallId: d.toolCallId,\n    result: d.error\n      ? d.result\n      : 'Your appointment on ' + d.humanStart + ' ' + d.tzAbbr + ' has been successfully cancelled. A confirmation text has been sent. We hope to see you again — call us anytime to rebook!'\n  }\n}];"
+      },
+      "id": "11111111-0025-0025-0025-000000000025",
+      "name": "Format Cancellation Reply",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2400, 660]
+    },
+
+    {
+      "parameters": {
+        "jsCode": "const parsedData = $('Parse Vapi Payload').first().json;\nreturn [{\n  json: {\n    toolCallId: parsedData.toolCallId,\n    result: \"I'm sorry, I wasn't able to process that request. Could you please tell me what you'd like to do — book, reschedule, cancel an appointment, or check availability?\"\n  }\n}];"
+      },
+      "id": "11111111-0026-0026-0026-000000000026",
+      "name": "Format Fallback Reply",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [960, 860]
+    },
+
+    {
+      "parameters": {
+        "jsCode": "const { toolCallId, result } = $json;\nreturn [{\n  json: {\n    results: [{\n      toolCallId: toolCallId || 'unknown',\n      result: result || \"I'm sorry, something went wrong. Please try again.\"\n    }]\n  }\n}];"
+      },
+      "id": "11111111-0027-0027-0027-000000000027",
+      "name": "Build Vapi Response Body",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2640, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "responseCode": 200,
+          "responseHeaders": {
+            "entries": [
+              { "name": "Content-Type", "value": "application/json" }
+            ]
+          }
+        }
+      },
+      "id": "11111111-0028-0028-0028-000000000028",
+      "name": "Respond to Vapi",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [2880, 300]
+    },
+
+    {
+      "parameters": {},
+      "id": "11111111-0029-0029-0029-000000000029",
+      "name": "Catch Workflow Errors",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [240, 600]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{\n  json: {\n    results: [{\n      toolCallId: 'unknown',\n      result: \"I'm sorry, I encountered a technical issue. Please try again or call back in a moment.\"\n    }]\n  }\n}];"
+      },
+      "id": "11111111-0030-0030-0030-000000000030",
+      "name": "Format Error Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [480, 600]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "responseCode": 200,
+          "responseHeaders": {
+            "entries": [
+              { "name": "Content-Type", "value": "application/json" }
+            ]
+          }
+        }
+      },
+      "id": "11111111-0031-0031-0031-000000000031",
+      "name": "Error Respond to Vapi",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [720, 600]
+    }
+  ],
+
+  "connections": {
+    "Vapi Webhook Receiver": {
+      "main": [
+        [{ "node": "Parse Vapi Payload", "type": "main", "index": 0 }]
+      ]
+    },
+    "Parse Vapi Payload": {
+      "main": [
+        [{ "node": "Route by Function Name", "type": "main", "index": 0 }]
+      ]
+    },
+    "Route by Function Name": {
+      "main": [
+        [{ "node": "Calc Availability Window", "type": "main", "index": 0 }],
+        [{ "node": "Prepare Booking Data", "type": "main", "index": 0 }],
+        [{ "node": "Prepare Reschedule Search", "type": "main", "index": 0 }],
+        [{ "node": "Prepare Cancel Search", "type": "main", "index": 0 }],
+        [{ "node": "Format Fallback Reply", "type": "main", "index": 0 }]
+      ]
+    },
+
+    "Calc Availability Window": {
+      "main": [
+        [{ "node": "Get Calendar Events", "type": "main", "index": 0 }]
+      ]
+    },
+    "Get Calendar Events": {
+      "main": [
+        [{ "node": "Find Open Slots", "type": "main", "index": 0 }]
+      ]
+    },
+    "Find Open Slots": {
+      "main": [
+        [{ "node": "Format Availability Reply", "type": "main", "index": 0 }]
+      ]
+    },
+    "Format Availability Reply": {
+      "main": [
+        [{ "node": "Build Vapi Response Body", "type": "main", "index": 0 }]
+      ]
+    },
+
+    "Prepare Booking Data": {
+      "main": [
+        [{ "node": "Create Calendar Event", "type": "main", "index": 0 }]
+      ]
+    },
+    "Create Calendar Event": {
+      "main": [
+        [{ "node": "Send Booking Confirmation SMS", "type": "main", "index": 0 }]
+      ]
+    },
+    "Send Booking Confirmation SMS": {
+      "main": [
+        [{ "node": "Format Booking Reply", "type": "main", "index": 0 }]
+      ]
+    },
+    "Format Booking Reply": {
+      "main": [
+        [{ "node": "Build Vapi Response Body", "type": "main", "index": 0 }]
+      ]
+    },
+
+    "Prepare Reschedule Search": {
+      "main": [
+        [{ "node": "Search Events for Reschedule", "type": "main", "index": 0 }]
+      ]
+    },
+    "Search Events for Reschedule": {
+      "main": [
+        [{ "node": "Pick Event to Reschedule", "type": "main", "index": 0 }]
+      ]
+    },
+    "Pick Event to Reschedule": {
+      "main": [
+        [{ "node": "Reschedule Error Check", "type": "main", "index": 0 }]
+      ]
+    },
+    "Reschedule Error Check": {
+      "main": [
+        [{ "node": "Update Calendar Event", "type": "main", "index": 0 }],
+        [{ "node": "Format Reschedule Reply", "type": "main", "index": 0 }]
+      ]
+    },
+    "Update Calendar Event": {
+      "main": [
+        [{ "node": "Send Reschedule SMS", "type": "main", "index": 0 }]
+      ]
+    },
+    "Send Reschedule SMS": {
+      "main": [
+        [{ "node": "Format Reschedule Reply", "type": "main", "index": 0 }]
+      ]
+    },
+    "Format Reschedule Reply": {
+      "main": [
+        [{ "node": "Build Vapi Response Body", "type": "main", "index": 0 }]
+      ]
+    },
+
+    "Prepare Cancel Search": {
+      "main": [
+        [{ "node": "Search Events for Cancel", "type": "main", "index": 0 }]
+      ]
+    },
+    "Search Events for Cancel": {
+      "main": [
+        [{ "node": "Validate Cancel Event", "type": "main", "index": 0 }]
+      ]
+    },
+    "Validate Cancel Event": {
+      "main": [
+        [{ "node": "Cancel Error Check", "type": "main", "index": 0 }]
+      ]
+    },
+    "Cancel Error Check": {
+      "main": [
+        [{ "node": "Delete Calendar Event", "type": "main", "index": 0 }],
+        [{ "node": "Format Cancellation Reply", "type": "main", "index": 0 }]
+      ]
+    },
+    "Delete Calendar Event": {
+      "main": [
+        [{ "node": "Send Cancellation SMS", "type": "main", "index": 0 }]
+      ]
+    },
+    "Send Cancellation SMS": {
+      "main": [
+        [{ "node": "Format Cancellation Reply", "type": "main", "index": 0 }]
+      ]
+    },
+    "Format Cancellation Reply": {
+      "main": [
+        [{ "node": "Build Vapi Response Body", "type": "main", "index": 0 }]
+      ]
+    },
+
+    "Format Fallback Reply": {
+      "main": [
+        [{ "node": "Build Vapi Response Body", "type": "main", "index": 0 }]
+      ]
+    },
+
+    "Build Vapi Response Body": {
+      "main": [
+        [{ "node": "Respond to Vapi", "type": "main", "index": 0 }]
+      ]
+    },
+
+    "Catch Workflow Errors": {
+      "main": [
+        [{ "node": "Format Error Response", "type": "main", "index": 0 }]
+      ]
+    },
+    "Format Error Response": {
+      "main": [
+        [{ "node": "Error Respond to Vapi", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": ""
+  },
+  "pinData": {},
+  "versionId": "11111111-aaaa-bbbb-cccc-000000000001",
+  "id": "vapi-ai-receptionist-v1",
+  "meta": {
+    "instanceId": "omisphere-ai-receptionist"
+  }
+}

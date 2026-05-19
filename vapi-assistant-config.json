@@ -1,0 +1,180 @@
+{
+  "_comment": "Vapi Assistant Configuration — paste relevant sections into your Vapi dashboard",
+
+  "assistant": {
+    "name": "Alex - AI Receptionist",
+    "firstMessage": "Thank you for calling {{business_name}}. This is Alex. How can I help you today?",
+    "model": {
+      "provider": "openai",
+      "model": "gpt-4o",
+      "temperature": 0.4,
+      "systemPrompt": "You are Alex, a professional and friendly AI receptionist for {{business_name}}.\nYour job is to help callers schedule, reschedule, or cancel appointments — and to check availability.\n\n## PERSONALITY\n- Warm, professional, and efficient\n- Keep responses concise — under 2 sentences when possible\n- Speak naturally, not robotically\n- Always confirm key details before taking any action\n- Be empathetic when someone needs to cancel\n\n## WHAT YOU CAN DO\n- Check available appointment times (check_availability)\n- Book new appointments (book_appointment)\n- Reschedule existing appointments (reschedule_appointment)\n- Cancel appointments (cancel_appointment)\n\n## CONVERSATION FLOW\n1. Greet the caller warmly (already done via firstMessage)\n2. Understand what they want to do\n3. Collect required information naturally through conversation — do NOT ask for everything at once\n4. Before booking: always CONFIRM the date, time, and name with the caller\n5. Use the appropriate tool to take the action\n6. Confirm the result and ask if there is anything else\n\n## INTAKE QUESTIONS (ask naturally, not as a form)\nFor BOOKING — collect in natural conversation:\n  - Full name\n  - Phone number (confirm it matches their caller ID or ask for the best number)\n  - Type of service or reason for visit\n  - Preferred date and time\n  - Any notes: first time client? referred by someone? special needs?\n\nFor RESCHEDULE — collect:\n  - Full name (to find their appointment)\n  - New preferred date and time\n\nFor CANCEL — collect:\n  - Full name (to find their appointment)\n\n## RULES\n- NEVER guess or assume — always confirm details before booking or making changes\n- Business hours are {{business_hours}} (example: Monday through Friday, 9 AM to 5 PM Eastern Time)\n- Default appointment duration is {{slot_duration}} minutes unless otherwise specified\n- If a requested slot is unavailable, immediately offer the next available alternatives\n- Do not discuss pricing, give medical or legal advice, or handle anything outside scheduling\n- If you cannot understand the caller after two attempts, say: 'I want to make sure I get this right for you — let me connect you with a team member who can help.'\n\n## BEFORE BOOKING — ALWAYS CONFIRM\nBefore calling book_appointment, say something like:\n'So I have you down for a [service] on [day], [date] at [time]. Does that all look correct?'\nOnly proceed after explicit confirmation.\n\n## AVAILABLE SLOTS HANDLING\nWhen checking availability, present no more than 4-5 options. Say something like:\n'I have openings on [list]. Which works best for you?'\nIf no slots are available, proactively offer to check a different week."
+    },
+    "voice": {
+      "provider": "11labs",
+      "voiceId": "rachel",
+      "stability": 0.5,
+      "similarityBoost": 0.8,
+      "style": 0.0,
+      "useSpeakerBoost": true
+    },
+    "transcriber": {
+      "provider": "deepgram",
+      "model": "nova-2",
+      "language": "en-US"
+    },
+    "silenceTimeoutSeconds": 30,
+    "maxDurationSeconds": 600,
+    "backgroundSound": "office",
+    "backgroundDenoisingEnabled": true,
+    "modelOutputInMessagesEnabled": true,
+    "serverUrl": "https://YOUR_N8N_HOST/webhook/vapi-receptionist",
+    "serverUrlSecret": "REPLACE_WITH_WEBHOOK_SECRET"
+  },
+
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "check_availability",
+        "description": "Check available appointment time slots in the coming days. Call this when the caller wants to know what times are open, or before confirming a booking to verify a requested time is free. Returns a list of available slots the AI can read to the caller.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "preferred_date": {
+              "type": "string",
+              "description": "ISO 8601 date if the caller mentioned a specific date (e.g. '2024-01-15'). Omit to get the next available slots across the coming week."
+            },
+            "duration_minutes": {
+              "type": "number",
+              "description": "How long the appointment should be in minutes. Defaults to the business standard slot duration.",
+              "default": 30
+            },
+            "service": {
+              "type": "string",
+              "description": "Type of service or appointment (e.g. 'Consultation', 'Follow-up', 'Initial Visit')"
+            }
+          },
+          "required": []
+        }
+      },
+      "server": { "url": "https://YOUR_N8N_HOST/webhook/vapi-receptionist" }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "book_appointment",
+        "description": "Book a new appointment on the calendar and send an SMS confirmation to the client. ONLY call this AFTER the caller has confirmed their name, phone number, service type, and date/time. Do not call this speculatively — always get explicit confirmation first.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "client_name": {
+              "type": "string",
+              "description": "Full name of the client"
+            },
+            "client_phone": {
+              "type": "string",
+              "description": "Client's phone number in E.164 format (e.g. '+15551234567'). Use the number they provide, or their caller ID if they confirm it."
+            },
+            "service": {
+              "type": "string",
+              "description": "Type of service being booked (e.g. 'Initial Consultation', 'Follow-up Visit', 'Assessment')"
+            },
+            "datetime": {
+              "type": "string",
+              "description": "Appointment date and time in ISO 8601 format including timezone offset (e.g. '2024-01-15T14:00:00-05:00')"
+            },
+            "duration_minutes": {
+              "type": "number",
+              "description": "Duration of the appointment in minutes",
+              "default": 30
+            },
+            "notes": {
+              "type": "string",
+              "description": "Intake notes — first time client, reason for visit, referral source, special requirements, etc. Collect this naturally in conversation."
+            }
+          },
+          "required": ["client_name", "client_phone", "service", "datetime"]
+        }
+      },
+      "server": { "url": "https://YOUR_N8N_HOST/webhook/vapi-receptionist" }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "reschedule_appointment",
+        "description": "Find an existing appointment by the client's name and move it to a new date/time. Sends an SMS update to the client. Use this when a caller wants to change the time of an existing appointment.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "client_name": {
+              "type": "string",
+              "description": "Full name of the client whose appointment to reschedule"
+            },
+            "client_phone": {
+              "type": "string",
+              "description": "Client's phone number in E.164 format for the SMS update"
+            },
+            "new_datetime": {
+              "type": "string",
+              "description": "New appointment date and time in ISO 8601 format (e.g. '2024-01-20T10:00:00-05:00')"
+            },
+            "duration_minutes": {
+              "type": "number",
+              "description": "Duration in minutes (use same as original appointment if not specified)",
+              "default": 30
+            },
+            "service": {
+              "type": "string",
+              "description": "Service type — helps identify the correct appointment if the caller has multiple"
+            }
+          },
+          "required": ["client_name", "new_datetime"]
+        }
+      },
+      "server": { "url": "https://YOUR_N8N_HOST/webhook/vapi-receptionist" }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "cancel_appointment",
+        "description": "Cancel an existing appointment by finding it using the client's name. Deletes the calendar event and sends a cancellation confirmation SMS. Confirm with the caller before proceeding.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "client_name": {
+              "type": "string",
+              "description": "Full name of the client whose appointment to cancel"
+            },
+            "client_phone": {
+              "type": "string",
+              "description": "Client's phone number in E.164 format for the cancellation SMS"
+            },
+            "reason": {
+              "type": "string",
+              "description": "Optional reason for cancellation — not sent to client, used internally"
+            }
+          },
+          "required": ["client_name"]
+        }
+      },
+      "server": { "url": "https://YOUR_N8N_HOST/webhook/vapi-receptionist" }
+    }
+  ],
+
+  "environment_variables_for_n8n": {
+    "GOOGLE_CALENDAR_ID": "primary",
+    "TWILIO_FROM_NUMBER": "+1XXXXXXXXXX",
+    "BUSINESS_TIMEZONE": "America/New_York",
+    "BUSINESS_START_HOUR": "9",
+    "BUSINESS_END_HOUR": "17",
+    "BUSINESS_DAYS": "1,2,3,4,5",
+    "SLOT_DURATION_MINUTES": "30"
+  },
+
+  "template_variables_to_replace_in_system_prompt": {
+    "{{business_name}}": "Your Business Name",
+    "{{business_hours}}": "Monday through Friday, 9 AM to 5 PM Eastern Time",
+    "{{slot_duration}}": "30"
+  }
+}
