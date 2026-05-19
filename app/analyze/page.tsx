@@ -10,10 +10,14 @@ import {
   MessageCircle,
   AlertTriangle,
   Shield,
+  Info,
 } from 'lucide-react';
 import { DEMO_RESULT } from '@/lib/demo';
+import { analyzeUrl } from '@/lib/analyze';
+import { saveAnalysis } from '@/lib/db';
 import type { AnalysisResult } from '@/lib/types';
 import CommentList from './CommentList';
+import ClusterGraph from './ClusterGraph';
 
 async function getAnalysis(
   url: string,
@@ -21,15 +25,9 @@ async function getAnalysis(
 ): Promise<AnalysisResult & { isDemo?: boolean }> {
   if (isDemo) return { ...DEMO_RESULT, isDemo: true };
 
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
-  const res = await fetch(`${baseUrl}/api/analyze?url=${encodeURIComponent(url)}`, {
-    cache: 'no-store',
-  });
-  if (!res.ok) {
-    const err = await res.json();
-    throw new Error(err.error || 'Analysis failed');
-  }
-  return res.json();
+  const result = await analyzeUrl(url);
+  saveAnalysis(result);
+  return result;
 }
 
 function formatNumber(n: number) {
@@ -95,7 +93,13 @@ export default async function AnalyzePage({
   try {
     result = await getAnalysis(url || '', isDemo);
   } catch (e: unknown) {
-    error = e instanceof Error ? e.message : 'Unknown error';
+    const message = e instanceof Error ? e.message : 'Unknown error';
+    if (message === 'NO_API_KEY') {
+      error =
+        'No YouTube API key configured — showing demo data. Add YOUTUBE_API_KEY to analyze real videos.';
+    } else {
+      error = `Analysis error: ${message} — showing demo data instead.`;
+    }
     result = { ...DEMO_RESULT, isDemo: true };
   }
 
@@ -145,7 +149,27 @@ export default async function AnalyzePage({
       </header>
 
       <main className="max-w-5xl mx-auto px-4 py-8">
-        {/* Error banner */}
+        {/* Probabilistic disclaimer */}
+        <div
+          className="mb-6 p-3 rounded-xl text-xs flex items-start gap-2"
+          style={{
+            background: 'rgba(99,102,241,0.08)',
+            border: '1px solid rgba(99,102,241,0.2)',
+            color: 'var(--muted)',
+          }}
+        >
+          <Info
+            className="w-3.5 h-3.5 flex-shrink-0 mt-0.5"
+            style={{ color: '#818cf8' }}
+          />
+          <span>
+            Scores are probabilistic behavioral signals — leads to investigate, not
+            definitive proof. A high score means &ldquo;worth a closer look,&rdquo; not a
+            verdict.
+          </span>
+        </div>
+
+        {/* Error / notice banner */}
         {error && (
           <div
             className="mb-6 p-4 rounded-xl border text-sm flex items-start gap-2"
@@ -156,9 +180,7 @@ export default async function AnalyzePage({
             }}
           >
             <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
-            <span>
-              <strong>Analysis error:</strong> {error} — showing demo data instead.
-            </span>
+            <span>{error}</span>
           </div>
         )}
 
@@ -248,6 +270,9 @@ export default async function AnalyzePage({
             </div>
           ))}
         </div>
+
+        {/* Cluster map (visual graph) */}
+        <ClusterGraph clusters={clusters} comments={result.comments} />
 
         {/* Clusters */}
         {clusters.length > 0 && (

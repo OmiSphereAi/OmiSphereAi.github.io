@@ -10,6 +10,25 @@ export interface VideoInfo {
   url: string;
 }
 
+export interface AccountInfo {
+  ageDays: number;
+  subscriberCount: number;
+  videoCount: number;
+  channelViewCount: number;
+  hidesSubscribers: boolean;
+}
+
+export interface RawComment {
+  id: string;
+  author: string;
+  authorChannelId?: string;
+  text: string;
+  likeCount: number;
+  publishedAt: string;
+  isReply: boolean;
+  account?: AccountInfo;
+}
+
 export interface AnalyzedComment {
   id: string;
   author: string;
@@ -22,6 +41,8 @@ export interface AnalyzedComment {
   classification: 'bot' | 'suspicious' | 'human';
   signals: string[]; // detected bot signals
   clusterId?: string;
+  account?: AccountInfo;
+  aiReasoning?: string;
 }
 
 export interface Cluster {

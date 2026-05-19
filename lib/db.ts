@@ -71,6 +71,19 @@ export function getRecentAnalyses(limit = 10) {
   return readData().analyses.slice(0, limit);
 }
 
+export function setAnalysisPublic(id: string, isPublic: boolean): void {
+  const data = readData();
+  const idx = data.analyses.findIndex((a: any) => a.id === id);
+  if (idx < 0) throw new Error('Analysis not found');
+  data.analyses[idx].is_public = isPublic ? 1 : 0;
+  writeData(data);
+}
+
+export function getAllAnalysesForReview(): any[] {
+  // Newest first as stored (saveAnalysis unshifts new entries)
+  return readData().analyses;
+}
+
 export function getPublicClusters() {
   const data = readData();
   const publicIds = new Set(data.analyses.filter((a: any) => a.is_public).map((a: any) => a.id));
