@@ -699,13 +699,7 @@
 
   "active": false,
   "settings": {
-    "executionOrder": "v1",
-    "errorWorkflow": ""
+    "executionOrder": "v1"
   },
-  "pinData": {},
-  "versionId": "11111111-aaaa-bbbb-cccc-000000000001",
-  "id": "vapi-ai-receptionist-v1",
-  "meta": {
-    "instanceId": "omisphere-ai-receptionist"
-  }
+  "pinData": {}
 }

@@ -177,10 +177,5 @@
   "settings": {
     "executionOrder": "v1"
   },
-  "pinData": {},
-  "versionId": "22222222-aaaa-bbbb-cccc-000000000001",
-  "id": "vapi-reminder-scheduler-v1",
-  "meta": {
-    "instanceId": "omisphere-reminder-scheduler"
-  }
+  "pinData": {}
 }

@@ -1,0 +1,39 @@
+{
+  "name": "TEST - Simple Webhook",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "test-webhook",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "7a3f8d2e-4b21-4c89-9e1f-2d5a8b7c4e1a",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [400, 300],
+      "webhookId": "test-webhook-id-1"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: { hello: 'world', received: $json } }];"
+      },
+      "id": "9c2e5f8d-1a47-4d3b-8f24-6e9b1c5a3f7d",
+      "name": "Hello World",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [620, 300]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [{ "node": "Hello World", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "pinData": {}
+}
