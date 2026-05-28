@@ -9,7 +9,13 @@ import {
   ExternalLink,
   TrendingUp,
 } from 'lucide-react';
-import { getDashboardStats, getRecentAnalyses, getPublicClusters } from '@/lib/db';
+import {
+  getDashboardStats,
+  getRecentAnalyses,
+  getPublicClusters,
+  getAllAnalysesForReview,
+} from '@/lib/db';
+import ApprovalControls from './ApprovalControls';
 
 export default function DashboardPage() {
   let stats = { totalAnalyses: 0, totalComments: 0, totalBots: 0, totalClusters: 0 };
@@ -32,11 +38,22 @@ export default function DashboardPage() {
     channel_name: string;
     analyzed_at: string;
   }> = [];
+  let reviewList: Array<{
+    id: string;
+    url: string;
+    video_title: string;
+    channel_name: string;
+    analyzed_at: string;
+    bot_count: number;
+    total_comments: number;
+    is_public?: number;
+  }> = [];
 
   try {
     stats = getDashboardStats();
     recent = getRecentAnalyses(10) as typeof recent;
     clusters = getPublicClusters() as typeof clusters;
+    reviewList = getAllAnalysesForReview() as typeof reviewList;
   } catch {
     // DB might not be initialized yet — show empty state
   }
@@ -221,6 +238,76 @@ export default function DashboardPage() {
                       >
                         <ExternalLink className="w-3.5 h-3.5" />
                       </a>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Pending review / published */}
+        <div className="mb-8">
+          <h2
+            className="text-sm font-medium mb-3 tracking-widest"
+            style={{ color: 'var(--muted)' }}
+          >
+            PENDING REVIEW / PUBLISHED
+          </h2>
+          {reviewList.length === 0 ? (
+            <div
+              className="p-8 rounded-xl border text-center text-sm"
+              style={{
+                background: 'var(--surface)',
+                borderColor: 'var(--border)',
+                color: 'var(--muted)',
+              }}
+            >
+              Nothing to review yet. Run an analysis first.
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {reviewList.map((a) => {
+                const pub = !!a.is_public;
+                return (
+                  <div
+                    key={a.id}
+                    className="flex items-center justify-between gap-4 p-4 rounded-xl border"
+                    style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div
+                        className="text-sm font-medium mb-0.5 truncate"
+                        style={{ color: 'var(--text)' }}
+                      >
+                        {a.video_title || a.url}
+                      </div>
+                      <div className="text-xs" style={{ color: 'var(--muted)' }}>
+                        {a.channel_name} ·{' '}
+                        <span className="text-red-400">{a.bot_count} bots</span> of{' '}
+                        {a.total_comments}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 flex-shrink-0">
+                      <span
+                        className="text-xs px-2 py-0.5 rounded-full"
+                        style={
+                          pub
+                            ? {
+                                background: 'rgba(34,197,94,0.1)',
+                                color: '#22c55e',
+                                border: '1px solid rgba(34,197,94,0.3)',
+                              }
+                            : {
+                                background: 'var(--surface2)',
+                                color: 'var(--muted)',
+                                border: '1px solid var(--border)',
+                              }
+                        }
+                      >
+                        {pub ? 'PUBLIC' : 'PRIVATE'}
+                      </span>
+                      <ApprovalControls id={a.id} isPublic={pub} />
                     </div>
                   </div>
                 );

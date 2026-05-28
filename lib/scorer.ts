@@ -1,14 +1,4 @@
-import type { AnalyzedComment } from './types';
-
-interface RawComment {
-  id: string;
-  author: string;
-  authorChannelId?: string;
-  text: string;
-  likeCount: number;
-  publishedAt: string;
-  isReply: boolean;
-}
+import type { AnalyzedComment, RawComment } from './types';
 
 function jaccardSimilarity(a: string, b: string): number {
   const setA = new Set(a.toLowerCase().split(/\s+/).filter(w => w.length > 2));
@@ -112,6 +102,35 @@ export function scoreComments(rawComments: RawComment[]): AnalyzedComment[] {
     if (/[!?]{4,}/.test(comment.text) || /\.{5,}/.test(comment.text)) {
       score += 8;
       signals.push('Repetitive punctuation pattern');
+    }
+
+    // 10. Account-level signals (only when channel metadata is available)
+    if (comment.account) {
+      const acct = comment.account;
+      if (acct.ageDays < 7) {
+        score += 30;
+        signals.push('Account created less than a week ago');
+      } else if (acct.ageDays < 30) {
+        score += 20;
+        signals.push('Very new account (under 30 days old)');
+      } else if (acct.ageDays < 90) {
+        score += 8;
+        signals.push('Relatively new account');
+      }
+
+      if (acct.subscriberCount === 0 && acct.videoCount === 0) {
+        score += 15;
+        signals.push('Empty channel — no videos or subscribers');
+      }
+
+      if (
+        acct.channelViewCount === 0 &&
+        acct.videoCount === 0 &&
+        acct.ageDays > 180
+      ) {
+        score += 10;
+        signals.push('Dormant account with no activity');
+      }
     }
 
     const finalScore = Math.min(100, score);

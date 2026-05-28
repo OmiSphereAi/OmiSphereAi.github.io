@@ -152,12 +152,22 @@ export default function HomePage() {
 
         {/* Sample narrative reports */}
         <div className="w-full max-w-2xl">
-          <h2
-            className="text-sm font-medium mb-4 text-center tracking-widest"
-            style={{ color: 'var(--muted)' }}
-          >
-            RECENT PUBLIC INTELLIGENCE REPORTS
-          </h2>
+          <div className="flex items-center justify-center gap-3 mb-4">
+            <Link
+              href="/reports"
+              className="text-sm font-medium tracking-widest transition-colors hover:text-indigo-400"
+              style={{ color: 'var(--muted)' }}
+            >
+              RECENT PUBLIC INTELLIGENCE REPORTS
+            </Link>
+            <Link
+              href="/reports"
+              className="text-xs transition-colors hover:text-indigo-400"
+              style={{ color: '#818cf8' }}
+            >
+              View all →
+            </Link>
+          </div>
           <div className="space-y-3">
             {[
               {
@@ -207,10 +217,14 @@ export default function HomePage() {
 
       {/* Footer */}
       <footer
-        className="text-center text-xs py-6 border-t"
+        className="text-center text-xs py-6 border-t space-y-1"
         style={{ borderColor: 'var(--border)', color: 'var(--muted)' }}
       >
-        OmniSphere · Social Media Intelligence · Demo Mode Active
+        <div>
+          OmniSphere surfaces probabilistic signals, not verdicts. Always verify before
+          acting.
+        </div>
+        <div>OmniSphere · Social Media Intelligence · Demo Mode Active</div>
       </footer>
     </div>
   );
